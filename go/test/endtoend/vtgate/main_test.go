@@ -81,6 +81,19 @@ create table t3_id7_idx(
 	id7 bigint,
 	id6 bigint,
     primary key(id)
+) Engine=InnoDB;
+
+create table t4(
+	id1 bigint,
+	id2 bigint,
+	primary key(id1)
+) Engine=InnoDB;
+
+create table t4_id2_idx(
+	id2 bigint,
+	id1 bigint,
+	keyspace_id varbinary(10),
+    primary key(id2, id1)
 ) Engine=InnoDB;`
 
 	VSchema = `
@@ -117,6 +130,15 @@ create table t3_id7_idx(
         "to": "id6"
       },
       "owner": "t3"
+    },
+    "t4_id2_vdx": {
+      "type": "consistent_lookup",
+      "params": {
+        "table": "t4_id2_idx",
+        "from": "id2,id1",
+        "to": "keyspace_id"
+      },
+      "owner": "t4"
     }
   },
   "tables": {
@@ -176,6 +198,26 @@ create table t3_id7_idx(
       "column_vindexes": [
         {
           "column": "id7",
+          "name": "hash"
+        }
+      ]
+    },
+	"t4": {
+      "column_vindexes": [
+        {
+          "column": "id1",
+          "name": "hash"
+        },
+        {
+          "columns": ["id2", "id1"],
+          "name": "t4_id2_vdx"
+        }
+      ]
+    },
+    "t4_id2_idx": {
+      "column_vindexes": [
+        {
+          "column": "id2",
           "name": "hash"
         }
       ]
