@@ -30,222 +30,112 @@ var (
 	vtParams        mysql.ConnParams
 	KeyspaceName    = "ks"
 	Cell            = "test"
-	SchemaSQL       = `create table t1(
-	id1 bigint,
-	id2 bigint,
-	primary key(id1)
-) Engine=InnoDB;
+	SchemaSQL       = `CREATE TABLE txn_info (
+  id bigint(20) NOT NULL,
+  txn_id varchar(50) NOT NULL,
+  org_txn_id varchar(50) DEFAULT NULL,
+  request_id varchar(50) NOT NULL,
+  channel varchar(50) NOT NULL,
+  rrn varchar(20) NOT NULL,
+  extended_info json DEFAULT NULL,
+  created_on timestamp(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  updated_on timestamp(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (id),
+  UNIQUE KEY txn_id (txn_id),
+  UNIQUE KEY request_id (request_id,channel),
+  KEY org_txn_id (org_txn_id),
+  KEY rrn (rrn)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-create table t1_id2_idx(
-	id2 bigint,
-	keyspace_id varbinary(10),
-	primary key(id2)
-) Engine=InnoDB;
+CREATE TABLE orgTxnId_id_vdx (
+  org_txn_id varchar(50) NOT NULL,
+  id bigint(20) NOT NULL,
+  keyspace_id varbinary(50) NOT NULL,
+  PRIMARY KEY (org_txn_id,id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-create table vstream_test(
-	id bigint,
-	val bigint,
-	primary key(id)
-) Engine=InnoDB;
-
-create table aggr_test(
-	id bigint,
-	val1 varchar(16),
-	val2 bigint,
-	primary key(id)
-) Engine=InnoDB;
-
-create table t2(
-	id3 bigint,
-	id4 bigint,
-	primary key(id3)
-) Engine=InnoDB;
-
-create table t2_id4_idx(
-	id bigint not null auto_increment,
-	id4 bigint,
-	id3 bigint,
-	primary key(id),
-	key idx_id4(id4)
-) Engine=InnoDB;
-
-create table t3(
-	id5 bigint,
-	id6 bigint,
-	id7 bigint,
-	primary key(id5)
-) Engine=InnoDB;
-
-create table t3_id7_idx(
-    id bigint not null auto_increment,
-	id7 bigint,
-	id6 bigint,
-    primary key(id)
-) Engine=InnoDB;
-
-create table t4(
-	id1 bigint,
-	id2 bigint,
-	primary key(id1)
-) Engine=InnoDB;
-
-create table t4_id2_idx(
-	id2 bigint,
-	id1 bigint,
-	keyspace_id varbinary(10),
-    primary key(id2, id1)
-) Engine=InnoDB;`
+CREATE TABLE reqid_channel_key_vdx (
+  request_id varchar(50) NOT NULL,
+  channel varchar(50) NOT NULL,
+  keyspace_id varbinary(50) NOT NULL,
+  PRIMARY KEY (request_id,channel)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`
 
 	VSchema = `
 {
   "sharded": true,
   "vindexes": {
-    "hash": {
-      "type": "hash"
+    "unicode_loose_md5_vdx": {
+      "type": "unicode_loose_md5"
     },
-    "t1_id2_vdx": {
-      "type": "consistent_lookup_unique",
-      "params": {
-        "table": "t1_id2_idx",
-        "from": "id2",
-        "to": "keyspace_id"
-      },
-      "owner": "t1"
-    },
-    "t2_id4_idx": {
-      "type": "lookup_hash",
-      "params": {
-        "table": "t2_id4_idx",
-        "from": "id4",
-        "to": "id3",
-        "autocommit": "true"
-      },
-      "owner": "t2"
-    },
-    "t3_id7_vdx": {
-      "type": "lookup_hash",
-      "params": {
-        "table": "t3_id7_idx",
-        "from": "id7",
-        "to": "id6"
-      },
-      "owner": "t3"
-    },
-    "t4_id2_vdx": {
+    "reqid_channel_key_vdx": {
       "type": "consistent_lookup",
       "params": {
-        "table": "t4_id2_idx",
-        "from": "id2,id1",
-        "to": "keyspace_id"
+        "table": "reqid_channel_key_vdx",
+        "from": "request_id, channel",
+        "to": "keyspace_id",
+        "autocommit": "true"
       },
-      "owner": "t4"
+      "owner": "txn_info"
+    },
+    "orgTxnId_id_vdx": {
+      "type": "consistent_lookup",
+      "params": {
+        "table": "orgTxnId_id_vdx",
+        "from": "org_txn_id, id",
+        "to": "keyspace_id",
+        "autocommit": "true"
+      },
+      "owner": "txn_info"
     }
   },
   "tables": {
-    "t1": {
+    "txn_info": {
       "column_vindexes": [
         {
-          "column": "id1",
-          "name": "hash"
+          "column": "txn_id",
+          "name": "unicode_loose_md5_vdx"
         },
         {
-          "column": "id2",
-          "name": "t1_id2_vdx"
-        }
-      ]
-    },
-    "t1_id2_idx": {
-      "column_vindexes": [
-        {
-          "column": "id2",
-          "name": "hash"
-        }
-      ]
-    },
-    "t2": {
-      "column_vindexes": [
-        {
-          "column": "id3",
-          "name": "hash"
+          "columns": [
+            "request_id",
+            "channel"
+          ],
+          "name": "reqid_channel_key_vdx"
         },
         {
-          "column": "id4",
-          "name": "t2_id4_idx"
-        }
-      ]
-    },
-    "t2_id4_idx": {
-      "column_vindexes": [
-        {
-          "column": "id4",
-          "name": "hash"
-        }
-      ]
-    },
-    "t3": {
-      "column_vindexes": [
-        {
-          "column": "id6",
-          "name": "hash"
-        },
-        {
-          "column": "id7",
-          "name": "t3_id7_vdx"
-        }
-      ]
-    },
-    "t3_id7_idx": {
-      "column_vindexes": [
-        {
-          "column": "id7",
-          "name": "hash"
-        }
-      ]
-    },
-	"t4": {
-      "column_vindexes": [
-        {
-          "column": "id1",
-          "name": "hash"
-        },
-        {
-          "columns": ["id2", "id1"],
-          "name": "t4_id2_vdx"
-        }
-      ]
-    },
-    "t4_id2_idx": {
-      "column_vindexes": [
-        {
-          "column": "id2",
-          "name": "hash"
-        }
-      ]
-    },
-    "vstream_test": {
-      "column_vindexes": [
-        {
-          "column": "id",
-          "name": "hash"
-        }
-      ]
-    },
-    "aggr_test": {
-      "column_vindexes": [
-        {
-          "column": "id",
-          "name": "hash"
+          "columns": [
+            "org_txn_id",
+            "id"
+          ],
+          "name": "orgTxnId_id_vdx"
         }
       ],
-      "columns": [
+      "columns" : [
+        { 
+           "name" : "org_txn_id",
+           "type" : "VARCHAR"
+		}
+	  ]
+    },
+    "reqid_channel_key_vdx": {
+      "column_vindexes": [
         {
-          "name": "val1",
-          "type": "VARCHAR"
+          "column": "request_id",
+          "name": "unicode_loose_md5_vdx"
+        }
+      ]
+    },
+    "orgTxnId_id_vdx": {
+      "column_vindexes": [
+        {
+          "column": "org_txn_id",
+          "name": "unicode_loose_md5_vdx"
         }
       ]
     }
   }
-}`
+}	`
 )
 
 func TestMain(m *testing.M) {

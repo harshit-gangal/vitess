@@ -359,9 +359,9 @@ func TestConsistentLookupUpdate(t *testing.T) {
 	3 3 3
 	3 4 4
 	*/
-	exec(t, conn, "insert into t4(id1, id2) values(1, 2), (2, 2), (3, 3), (4, 3)")
-	qr := exec(t, conn, "select id1, id2 from t4 order by id1")
-	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(1) INT64(2)] [INT64(2) INT64(2)] [INT64(3) INT64(3)] [INT64(4) INT64(3)]]"; got != want {
+	exec(t, conn, "insert into t4(id1, id2) values('1', 2), ('2', 2), ('3', 3), ('4', 3)")
+	qr := exec(t, conn, "select id1, id2 from t4")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[VARCHAR(\"1\") INT64(2)] [VARCHAR(\"2\") INT64(2)] [VARCHAR(\"3\") INT64(3)] [VARCHAR(\"4\") INT64(3)]]"; got != want {
 		t.Errorf("select:\n%v want\n%v", got, want)
 	}
 
@@ -378,9 +378,9 @@ func TestConsistentLookupUpdate(t *testing.T) {
 	3 3 3
 	3 4 4
 	*/
-	exec(t, conn, "update t4 set id2 = 42 where id1 = 1")
-	qr = exec(t, conn, "select id1, id2 from t4 order by id1")
-	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(1) INT64(42)] [INT64(2) INT64(2)] [INT64(3) INT64(3)] [INT64(4) INT64(3)]]"; got != want {
+	exec(t, conn, "update t4 set id2 = 42 where id1 = '1'")
+	qr = exec(t, conn, "select id1, id2 from t4")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[VARCHAR(\"1\") INT64(42)] [VARCHAR(\"2\") INT64(2)] [VARCHAR(\"3\") INT64(3)] [VARCHAR(\"4\") INT64(3)]]"; got != want {
 		t.Errorf("select:\n%v want\n%v", got, want)
 	}
 
@@ -406,6 +406,80 @@ func TestConsistentLookupUpdate(t *testing.T) {
 	qr = exec(t, conn, "select * from t4")
 	require.Empty(t, qr.Rows)
 	qr = exec(t, conn, "select * from t4_id2_idx")
+	require.Empty(t, qr.Rows)
+}
+
+func TestConsistentLookupUpdateClient(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	/* Simple insert. after this dml, the tables will contain the following:
+	t4 (id1, id2):
+	1 2
+	2 2
+	3 3
+	4 3
+
+	t4_id2_idx (id2, id1, keyspace_id:id1):
+	2 1 1
+	2 2 2
+	3 3 3
+	3 4 4
+	*/
+	exec(t, conn, "INSERT INTO txn_info(id, txn_id, org_txn_id, request_id, channel, rrn) VALUES(1, 'txn1', 'txn1', 'rq1', 'chnl1', 'rrn1')")
+	exec(t, conn, "INSERT INTO txn_info(id, txn_id, org_txn_id, request_id, channel, rrn) VALUES(2, 'txn2', 'txn2', 'rq2', 'chnl1', 'rrn2')")
+	exec(t, conn, "INSERT INTO txn_info(id, txn_id, org_txn_id, request_id, channel, rrn) VALUES(3, 'txn3', 'txn3', 'rq3', 'chnl1', 'rrn3')")
+	exec(t, conn, "INSERT INTO txn_info(id, txn_id, org_txn_id, request_id, channel, rrn) VALUES(4, 'txn4', 'txn4', 'rq3', 'chnl4', 'rrn4')")
+	qr := exec(t, conn, "select id, txn_id, org_txn_id from txn_info")
+	//	if got, want := fmt.Sprintf("%v", qr.Rows), "[[VARCHAR(\"1\") INT64(2)] [VARCHAR(\"2\") INT64(2)] [VARCHAR(\"3\") INT64(3)] [VARCHAR(\"4\") INT64(3)]]"; got != want {
+	//		t.Errorf("select:\n%v want\n%v", got, want)
+	//	}
+
+	/* Updating a lookup column. after this dml, the tables will contain the following:
+	t4 (id1, id2):
+	1 42
+	2 2
+	3 3
+	4 3
+
+	t4_id2_idx (id2, id1, keyspace_id:id1):
+	42 1 1
+	2 2 2
+	3 3 3
+	3 4 4
+	*/
+	exec(t, conn, "UPDATE txn_info SET org_txn_id = 'txn10', id = 1 WHERE id = 1")
+	qr = exec(t, conn, "select id, txn_id, org_txn_id from txn_info")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[VARCHAR(\"1\") INT64(42)] [VARCHAR(\"2\") INT64(2)] [VARCHAR(\"3\") INT64(3)] [VARCHAR(\"4\") INT64(3)]]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+
+	/* delete one specific keyspace id. after this dml, the tables will contain the following:
+	t4 (id1, id2):
+	2 2
+	3 3
+	4 3
+
+	t4_id2_idx (id2, id1, keyspace_id:id1):
+	2 2 2
+	3 3 3
+	3 4 4
+	*/
+	//exec(t, conn, "delete from t4 where id2 = 42")
+	//qr = exec(t, conn, "select * from t4 where id2 = 42")
+	//require.Empty(t, qr.Rows)
+	//qr = exec(t, conn, "select * from t4_id2_idx where id2 = 42")
+	//require.Empty(t, qr.Rows)
+
+	// delete all the rows.
+	exec(t, conn, "delete from txn_info")
+	qr = exec(t, conn, "select * from txn_info")
+	require.Empty(t, qr.Rows)
+	qr = exec(t, conn, "select * from orgTxnId_id_vdx")
+	require.Empty(t, qr.Rows)
+	qr = exec(t, conn, "select * from reqid_channel_key_vdx")
 	require.Empty(t, qr.Rows)
 }
 
