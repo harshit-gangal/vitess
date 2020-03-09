@@ -494,6 +494,19 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 
 	tkn.skipBlank()
 	switch ch := tkn.lastChar; {
+	case ch == '@':
+		tkn.next()
+		if tkn.lastChar == '@' {
+			tkn.next()
+			tokenID, _ := tkn.scanIdentifier(byte(tkn.lastChar), false)
+			if tokenID == SESSION {
+				return DOUBLE_AT_SESSION, []byte("@@SESSION")
+			} else if tokenID == GLOBAL {
+				return DOUBLE_AT_GLOBAL, []byte("@@GLOBAL")
+			}
+			return 0, nil
+		}
+		return tkn.scanIdentifier(byte(ch), false)
 	case isLetter(ch):
 		tkn.next()
 		if ch == 'X' || ch == 'x' {
@@ -954,8 +967,20 @@ func (tkn *Tokenizer) reset() {
 	tkn.SkipToEnd = false
 }
 
+func (tkn *Tokenizer) scanSomething() (int, []byte) {
+	buffer := &bytes2.Buffer{}
+	buffer.WriteString("@@") //@@ / @@SESSION. / @@GLOBAL.
+	tkn.next()
+	for isLetter(tkn.lastChar) || isCarat(tkn.lastChar) {
+		buffer.WriteByte(byte(tkn.lastChar))
+		tkn.next()
+	}
+	// match new keywords.
+	return DOUBLE_AT, []byte("@@")
+}
+
 func isLetter(ch uint16) bool {
-	return 'a' <= ch && ch <= 'z' || 'A' <= ch && ch <= 'Z' || ch == '_' || ch == '@'
+	return 'a' <= ch && ch <= 'z' || 'A' <= ch && ch <= 'Z' || ch == '_'
 }
 
 func isCarat(ch uint16) bool {

@@ -135,6 +135,12 @@ type (
 		Scope    string
 	}
 
+	// SetVar represents a SET Variables statements.
+	SetVar struct {
+		Comments Comments
+		Exprs    SetVarExprs
+	}
+
 	// DBDDL represents a CREATE, DROP, or ALTER database statement.
 	DBDDL struct {
 		Action   string
@@ -233,6 +239,7 @@ func (*OtherAdmin) iStatement()        {}
 func (*Select) iSelectStatement()      {}
 func (*Union) iSelectStatement()       {}
 func (*ParenSelect) iSelectStatement() {}
+func (*SetVar) iStatement()            {}
 
 // ParenSelect can actually not be a top level statement,
 // but we have to allow it because it's a requirement
@@ -791,6 +798,16 @@ type SetExpr struct {
 	Expr Expr
 }
 
+// SetVarExprs represents a list of set expressions.
+type SetVarExprs []*SetVarExpr
+
+// SetVarExpr represents a set expression.
+type SetVarExpr struct {
+	Scope string
+	Name  ColIdent
+	Expr  Expr
+}
+
 // OnDup represents an ON DUPLICATE KEY clause.
 type OnDup UpdateExprs
 
@@ -869,6 +886,11 @@ func (node *Set) Format(buf *TrackedBuffer) {
 	} else {
 		buf.Myprintf("set %v%s %v", node.Comments, node.Scope, node.Exprs)
 	}
+}
+
+// Format formats the node.
+func (node *SetVar) Format(buf *TrackedBuffer) {
+	buf.Myprintf("set %v%v", node.Comments, node.Exprs)
 }
 
 // Format formats the node.
@@ -1721,6 +1743,24 @@ func (node *SetExpr) Format(buf *TrackedBuffer) {
 		buf.Myprintf("%s %s", node.Name.String(), strings.ToLower(string(sqlVal.Val)))
 	} else {
 		buf.Myprintf("%s = %v", node.Name.String(), node.Expr)
+	}
+}
+
+// Format formats the node.
+func (node SetVarExprs) Format(buf *TrackedBuffer) {
+	var prefix string
+	for _, n := range node {
+		buf.Myprintf("%s%v", prefix, n)
+		prefix = ", "
+	}
+}
+
+// Format formats the node.
+func (node *SetVarExpr) Format(buf *TrackedBuffer) {
+	if node.Scope == VariableStr {
+		buf.Myprintf("@%s = %v", node.Name.String(), node.Expr)
+	} else {
+		buf.Myprintf("%s %s = %v", node.Scope, node.Name.String(), node.Expr)
 	}
 }
 

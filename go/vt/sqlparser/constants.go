@@ -41,6 +41,7 @@ const (
 	// Set.Scope or Show.Scope
 	SessionStr        = "session"
 	GlobalStr         = "global"
+	VariableStr       = "variable"
 	VitessMetadataStr = "vitess_metadata"
 	ImplicitStr       = ""
 

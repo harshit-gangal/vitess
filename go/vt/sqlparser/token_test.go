@@ -54,6 +54,18 @@ func TestLiteralID(t *testing.T) {
 		in:  "``",
 		id:  LEX_ERROR,
 		out: "",
+	}, {
+		in:  "@",
+		id:  ID,
+		out: "@",
+	}, {
+		in:  "@@",
+		id:  DOUBLE_AT,
+		out: "@@",
+	}, {
+		in:  "@@SESSION.sql_mode",
+		id:  DOUBLE_AT_SESSION,
+		out: "@@session",
 	}}
 
 	for _, tcase := range testcases {

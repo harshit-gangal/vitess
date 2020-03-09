@@ -87,8 +87,10 @@ func skipToEnd(yylex interface{}) {
   limit         *Limit
   updateExprs   UpdateExprs
   setExprs      SetExprs
+  setVarExprs	SetVarExprs
   updateExpr    *UpdateExpr
   setExpr       *SetExpr
+  setVarExpr    *SetVarExpr
   colIdent      ColIdent
   tableIdent    TableIdent
   convertType   *ConvertType
@@ -186,7 +188,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> COLLATION DATABASES TABLES VITESS_METADATA VSCHEMA FULL PROCESSLIST COLUMNS FIELDS ENGINES PLUGINS
 
 // SET tokens
-%token <bytes> NAMES CHARSET GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
+%token <bytes> NAMES CHARSET GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE DOUBLE_AT DOUBLE_AT_SESSION DOUBLE_AT_GLOBAL
 
 // Functions
 %token <bytes> CURRENT_TIMESTAMP DATABASE CURRENT_DATE
@@ -262,9 +264,11 @@ func skipToEnd(yylex interface{}) {
 %type <updateExprs> on_dup_opt
 %type <updateExprs> update_list
 %type <setExprs> set_list transaction_chars
+%type <setVarExprs> setvar_list
 %type <bytes> charset_or_character_set
 %type <updateExpr> update_expression
 %type <setExpr> set_expression transaction_char
+%type <setVarExpr> setvar_expression
 %type <str> isolation_level
 %type <bytes> for_from
 %type <str> ignore_opt default_opt
@@ -505,9 +509,9 @@ set_statement:
   {
     $$ = &Set{Comments: Comments($2), Exprs: $3}
   }
-| SET comment_opt set_session_or_global set_list
+| SET comment_opt setvar_list
   {
-    $$ = &Set{Comments: Comments($2), Scope: $3, Exprs: $4}
+    $$ = &SetVar{Comments: Comments($2), Exprs: $3}
   }
 | SET comment_opt set_session_or_global TRANSACTION transaction_chars
   {
@@ -517,6 +521,7 @@ set_statement:
   {
     $$ = &Set{Comments: Comments($2), Exprs: $4}
   }
+
 
 transaction_chars:
   transaction_char
@@ -3097,10 +3102,6 @@ set_expression:
   {
     $$ = &SetExpr{Name: $1, Expr: NewStrVal([]byte("off"))}
   }
-| reserved_sql_id '=' expression
-  {
-    $$ = &SetExpr{Name: $1, Expr: $3}
-  }
 | charset_or_character_set charset_value collate_opt
   {
     $$ = &SetExpr{Name: NewColIdent(string($1)), Expr: $2}
@@ -3126,6 +3127,42 @@ charset_value:
 | DEFAULT
   {
     $$ = &Default{}
+  }
+
+setvar_list:
+  setvar_expression
+  {
+    $$ = SetVarExprs{$1}
+  }
+| setvar_list ',' setvar_expression
+  {
+    $$ = append($1, $3)
+  }
+
+setvar_expression:
+  '@' sql_id '=' expression
+  {
+    $$ = &SetVarExpr{Scope: VariableStr, Name: $2, Expr: $4}
+  }
+| SESSION sql_id '=' expression
+{
+	$$ = &SetVarExpr{Scope: SessionStr, Name: $2, Expr: $4}
+}
+| DOUBLE_AT sql_id '=' expression
+{
+	$$ = &SetVarExpr{Scope: SessionStr, Name: $2, Expr: $4}
+}
+| DOUBLE_AT_SESSION '.' sql_id '=' expression
+  {
+	$$ = &SetVarExpr{Scope: SessionStr, Name: $3, Expr: $5}
+  }
+| GLOBAL sql_id '=' expression
+  {
+  	$$ = &SetVarExpr{Scope: GlobalStr, Name: $2, Expr: $4}
+  }
+| DOUBLE_AT_GLOBAL '.' sql_id '=' expression
+  {
+  	$$ = &SetVarExpr{Scope: GlobalStr, Name: $3, Expr: $5}
   }
 
 for_from:

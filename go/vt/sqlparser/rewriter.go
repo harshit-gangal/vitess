@@ -583,6 +583,32 @@ func (r *replaceSetExprsItems) inc() {
 	*r++
 }
 
+func replaceSetVarComments(newNode, parent SQLNode) {
+	parent.(*SetVar).Comments = newNode.(Comments)
+}
+
+func replaceSetVarExprs(newNode, parent SQLNode) {
+	parent.(*SetVar).Exprs = newNode.(SetVarExprs)
+}
+
+func replaceSetVarExprExpr(newNode, parent SQLNode) {
+	parent.(*SetVarExpr).Expr = newNode.(Expr)
+}
+
+func replaceSetVarExprName(newNode, parent SQLNode) {
+	parent.(*SetVarExpr).Name = newNode.(ColIdent)
+}
+
+type replaceSetVarExprsItems int
+
+func (r *replaceSetVarExprsItems) replace(newNode, container SQLNode) {
+	container.(SetVarExprs)[int(*r)] = newNode.(*SetVarExpr)
+}
+
+func (r *replaceSetVarExprsItems) inc() {
+	*r++
+}
+
 func replaceShowOnTable(newNode, parent SQLNode) {
 	parent.(*Show).OnTable = newNode.(TableName)
 }
@@ -1159,6 +1185,22 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 
 	case SetExprs:
 		replacer := replaceSetExprsItems(0)
+		replacerRef := &replacer
+		for _, item := range n {
+			a.apply(node, item, replacerRef.replace)
+			replacerRef.inc()
+		}
+
+	case *SetVar:
+		a.apply(node, n.Comments, replaceSetVarComments)
+		a.apply(node, n.Exprs, replaceSetVarExprs)
+
+	case *SetVarExpr:
+		a.apply(node, n.Expr, replaceSetVarExprExpr)
+		a.apply(node, n.Name, replaceSetVarExprName)
+
+	case SetVarExprs:
+		replacer := replaceSetVarExprsItems(0)
 		replacerRef := &replacer
 		for _, item := range n {
 			a.apply(node, item, replacerRef.replace)
