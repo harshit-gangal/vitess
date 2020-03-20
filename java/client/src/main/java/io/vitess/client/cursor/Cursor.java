@@ -42,7 +42,7 @@ import javax.annotation.concurrent.NotThreadSafe;
  * should be called to free resources when done, regardless of whether all the rows were processed.
  *
  * <p>Each individual {@code Cursor} is not thread-safe; it must be protected if used concurrently.
- * However, two cursors from the same {@link io.vitess.client.VTGateConn VTGateConn} can be accessed
+ * However, two cursors from the same {@link io.vitess.client.VTGateConnection VTGateConn} can be accessed
  * concurrently without additional synchronization.
  */
 @NotThreadSafe
