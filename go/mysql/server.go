@@ -92,7 +92,7 @@ type Handler interface {
 
 	// InitDB is called once at the beginning to set db name,
 	// and subsequently for every ComInitDB event.
-	ComInitDB(c *Conn, schemaName string)
+	ComInitDB(c *Conn, schemaName string) error
 
 	// ComQuery is called when a connection receives a query.
 	// Note the contents of the query slice may change after
@@ -458,7 +458,10 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 	}
 
 	// Set initial db name.
-	l.handler.ComInitDB(c, c.schemaName)
+	err = l.handler.ComInitDB(c, c.schemaName)
+	if err != nil {
+		return
+	}
 
 	for {
 		err := c.handleNextCommand(l.handler)

@@ -779,7 +779,10 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		db := c.parseComInitDB(data)
 		c.recycleReadPacket()
 		c.schemaName = db
-		handler.ComInitDB(c, db)
+		err := handler.ComInitDB(c, db)
+		if err != nil {
+			return err
+		}
 		if err := c.writeOKPacket(0, 0, c.StatusFlags, 0); err != nil {
 			log.Errorf("Error writing ComInitDB result to %s: %v", c, err)
 			return err

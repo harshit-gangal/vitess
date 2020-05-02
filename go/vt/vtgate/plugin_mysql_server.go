@@ -166,8 +166,14 @@ func startSpan(ctx context.Context, query, label string) (trace.Span, context.Co
 	return startSpanTestable(ctx, query, label, trace.NewSpan, trace.NewFromString)
 }
 
-func (vh *vtgateHandler) ComInitDB(c *mysql.Conn, schemaName string) {
-	vh.session(c).TargetString = schemaName
+func (vh *vtgateHandler) ComInitDB(c *mysql.Conn, schemaName string) error {
+	err := vh.ComQuery(c, "use "+schemaName, func(result *sqltypes.Result) error {
+		return nil
+	})
+	if err != nil {
+		return mysql.NewSQLErrorFromError(err)
+	}
+	return nil
 }
 
 func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
