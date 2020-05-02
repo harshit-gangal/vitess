@@ -97,7 +97,7 @@ public class GrpcClientFactory implements RpcClientFactory {
         .negotiationType(NegotiationType.PLAINTEXT)
         .intercept(interceptors);
     if (loadBalancerFactory != null) {
-      channel.loadBalancerFactory(loadBalancerFactory);
+      channel.channelFactory(loadBalancerFactory);
     }
     if (nameResolverFactory != null) {
       channel.nameResolverFactory(nameResolverFactory);
