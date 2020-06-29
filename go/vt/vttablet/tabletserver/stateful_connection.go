@@ -36,7 +36,7 @@ import (
 // This is used for transactions and reserved connections.
 // NOTE: After use, if must be returned either by doing a Unlock() or a Release().
 type StatefulConnection struct {
-	pool           *StatefulConnectionPool
+	pool           IStatefulConnPool
 	dbConn         *connpool.DBConn
 	ConnID         tx.ConnID
 	env            tabletenv.Env
@@ -44,6 +44,14 @@ type StatefulConnection struct {
 	tainted        bool
 	enforceTimeout bool
 }
+
+type IStatefulConnPool interface {
+	markAsNotInUse(id tx.ConnID)
+	unregister(id tx.ConnID, reason string)
+	renewConn(sc *StatefulConnection) error
+}
+
+var _ IStatefulConnPool = (*StatefulConnectionPool)(nil)
 
 // Close closes the underlying connection. When the connection is Unblocked, it will be Released
 func (sc *StatefulConnection) Close() {
@@ -128,10 +136,10 @@ func (sc *StatefulConnection) Releasef(reasonFormat string, a ...interface{}) {
 
 //Renew the existing connection with new connection id.
 func (sc *StatefulConnection) Renew() error {
-	err := sc.pool.RenewConn(sc)
+	err := sc.pool.renewConn(sc)
 	if err != nil {
 		sc.Close()
-		return vterrors.Wrap(err, "connection renew failed: ")
+		return vterrors.Wrap(err, "connection renew failed")
 	}
 	return nil
 }
@@ -155,8 +163,8 @@ func (sc *StatefulConnection) ID() tx.ConnID {
 	return sc.ConnID
 }
 
-//UnderlyingdDBConn returns the underlying database connection
-func (sc *StatefulConnection) UnderlyingdDBConn() *connpool.DBConn {
+//UnderlyingDBConn returns the underlying database connection
+func (sc *StatefulConnection) UnderlyingDBConn() *connpool.DBConn {
 	return sc.dbConn
 }
 
@@ -172,9 +180,6 @@ func (sc *StatefulConnection) Stats() *tabletenv.Stats {
 
 //Taint taints the existing connection.
 func (sc *StatefulConnection) Taint() {
-	if sc.tainted {
-		return
-	}
 	sc.tainted = true
 	sc.dbConn.Taint()
 }

@@ -17,6 +17,7 @@ limitations under the License.
 package tabletserver
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -503,4 +504,28 @@ func startTransaction(te *TxEngine, writeTransaction bool) error {
 	}
 	_, _, err := te.Begin(context.Background(), 0, options)
 	return err
+}
+
+func TestTxEngineFailReserve(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	db.AddQueryPattern(".*", &sqltypes.Result{})
+	config := tabletenv.NewDefaultConfig()
+	config.DB = newDBConfigs(db)
+	te := NewTxEngine(tabletenv.NewEnv(config, "TabletServerTest"))
+
+	_, err := te.Reserve(ctx, &querypb.ExecuteOptions{}, 0, nil)
+	require.EqualError(t, err, "TxEngine.Reserve: cannot provide new connection in state NotServing")
+
+	_, err = te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, nil)
+	require.EqualError(t, err, "TxEngine.ReserveBegin: cannot provide new connection in state NotServing")
+
+	te.AcceptReadOnly()
+
+	db.AddRejectedQuery("dummy_query", errors.New("failed executing dummy_query"))
+	_, err = te.Reserve(ctx, &querypb.ExecuteOptions{}, 0, []string{"dummy_query"})
+	require.EqualError(t, err, "TxEngine.Reserve: unknown error: failed executing dummy_query (errno 1105) (sqlstate HY000) during query: dummy_query")
+
+	_, err = te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{"dummy_query"})
+	require.EqualError(t, err, "TxEngine.ReserveBegin: unknown error: failed executing dummy_query (errno 1105) (sqlstate HY000) during query: dummy_query")
 }

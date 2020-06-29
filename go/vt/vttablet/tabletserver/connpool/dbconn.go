@@ -88,6 +88,10 @@ func NewDBConnNoPool(ctx context.Context, params dbconfigs.Connector, dbaPool *d
 	}, nil
 }
 
+func (dbc *DBConn) UnderlyingDBConn() *DBConn {
+	return dbc
+}
+
 // Exec executes the specified query. If there is a connection error, it will reconnect
 // and retry. A failed reconnect will trigger a CheckMySQL.
 func (dbc *DBConn) Exec(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
