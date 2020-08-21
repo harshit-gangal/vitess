@@ -38,6 +38,7 @@ type TabletHealth struct {
 	MasterTermStartTime int64
 	LastError           error
 	Serving             bool
+	DBName              string
 }
 
 // DeepEqual compares two TabletHealth. Since we include protos, we

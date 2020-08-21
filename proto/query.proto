@@ -848,6 +848,9 @@ message StreamHealthResponse {
   // hasn't changed in the meantime e.g. due to tablet restarts where ports or
   // ips have been reused but assigned differently.
   topodata.TabletAlias tablet_alias = 5;
+
+  //Underlying database name for the given target.
+  string dbName = 7;
 }
 
 // TransactionState represents the state of a distributed transaction.

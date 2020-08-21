@@ -134,6 +134,13 @@ func (gw *TabletGateway) QueryServiceByAlias(alias *topodatapb.TabletAlias) (que
 	return gw.hc.TabletConnection(alias)
 }
 
+
+// GetTabletsForTarget returns the healthy tablets for given target
+func (gw *TabletGateway)  GetTabletsForTarget(target *querypb.Target) {
+	gw.hc.GetHealthyTabletStats(target)
+}
+
+
 // RegisterStats registers the stats to export the lag since the last refresh
 // and the checksum of the topology
 func (gw *TabletGateway) RegisterStats() {
@@ -349,5 +356,6 @@ func (gw *TabletGateway) nextTablet(cell string, tablets []*discovery.TabletHeal
 
 // TabletsCacheStatus returns a displayable version of the health check cache.
 func (gw *TabletGateway) TabletsCacheStatus() discovery.TabletsCacheStatusList {
+	gw.hc.CacheStatus()
 	return gw.hc.CacheStatus()
 }

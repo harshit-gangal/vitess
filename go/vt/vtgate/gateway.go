@@ -15,10 +15,10 @@ package vtgate
 
 import (
 	"flag"
-	"time"
-
 	"golang.org/x/net/context"
+	"time"
 	"vitess.io/vitess/go/vt/log"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/srvtopo"
@@ -68,6 +68,9 @@ type Gateway interface {
 
 	// TabletByAlias returns a QueryService
 	QueryServiceByAlias(alias *topodatapb.TabletAlias) (queryservice.QueryService, error)
+
+	// GetTabletsForTarget returns the healthy tablets for given target
+	GetTabletsForTarget(target *querypb.Target)
 }
 
 // Creator is the factory method which can create the actual gateway object.

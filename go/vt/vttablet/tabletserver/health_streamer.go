@@ -69,6 +69,7 @@ func newHealthStreamer(env tabletenv.Env, alias topodatapb.TabletAlias) *healthS
 			RealtimeStats: &querypb.RealtimeStats{
 				HealthError: errUnintialized,
 			},
+			DbName: env.Config().DB.DBName,
 		},
 
 		history: history.New(5),

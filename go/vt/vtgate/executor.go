@@ -785,6 +785,28 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			}
 			show.ShowTablesOpt.DbName = ""
 		}
+		expr := show.ShowTablesOpt.Filter.Filter
+		if expr != nil {
+			// shardExec will re-resolve this a bit later.
+			rss, err := e.resolver.resolver.ResolveDestination(ctx, destKeyspace, destTabletType, key.DestinationAnyShard{})
+			if err != nil {
+				return nil, err
+			}
+			if len(rss) != 1 {
+				return nil, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "keyspace %s has no shards", destKeyspace)
+			}
+
+			sqlparser.Rewrite(expr, func(cursor *sqlparser.Cursor) bool {
+				switch n := cursor.Node().(type) {
+				case *sqlparser.ColIdent:
+					if strings.HasSuffix(n.Lowered(), "Tables_in_") {
+						ksName := n.Lowered()[10:]
+						rss[0].Gateway.
+					}
+				}
+				return true
+			}, nil)
+		}
 		sql = sqlparser.String(show)
 	case sqlparser.KeywordString(sqlparser.DATABASES), "vitess_keyspaces", "keyspaces":
 		keyspaces, err := e.resolver.resolver.GetAllKeyspaces(ctx)
@@ -1030,6 +1052,7 @@ func (e *Executor) showTablets() (*sqltypes.Result, error) {
 			}
 		}
 	}
+	e.scatterConn.gateway.TabletsCacheStatus()
 	return &sqltypes.Result{
 		Fields:       buildVarCharFields("Cell", "Keyspace", "Shard", "TabletType", "State", "Alias", "Hostname", "MasterTermStartTime"),
 		Rows:         rows,

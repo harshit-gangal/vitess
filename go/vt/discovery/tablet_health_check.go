@@ -71,6 +71,8 @@ type tabletHealthCheck struct {
 	// possibly delete both these
 	loggedServingState    bool
 	lastResponseTimestamp time.Time // timestamp of the last healthcheck response
+	// DBName is underlying batabase name
+	DBName string
 }
 
 // String is defined because we want to print a []*tabletHealthCheck array nicely.
@@ -93,6 +95,7 @@ func (thc *tabletHealthCheck) SimpleCopy() *TabletHealth {
 		LastError:           thc.LastError,
 		MasterTermStartTime: thc.MasterTermStartTime,
 		Serving:             thc.Serving,
+		DBName:              thc.DBName,
 	}
 }
 
@@ -199,6 +202,7 @@ func (thc *tabletHealthCheck) processResponse(hc *HealthCheckImpl, shr *query.St
 		reason = "healthCheck update error: " + healthErr.Error()
 	}
 	thc.setServingState(serving, reason)
+	thc.DBName = shr.DbName
 
 	// notify downstream for master change
 	hc.updateHealth(thc.SimpleCopy(), shr, currentTarget, trivialNonMasterUpdate, isMasterUpdate, isMasterChange)

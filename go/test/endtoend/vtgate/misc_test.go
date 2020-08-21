@@ -66,15 +66,16 @@ func TestDoStatement(t *testing.T) {
 	exec(t, conn, "do 'a', 1+2,database()")
 }
 
-func TestShowColumns(t *testing.T) {
+func TestShow(t *testing.T) {
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
-	expected := `[[VARCHAR("id") TEXT("bigint(20)") VARCHAR("NO") VARCHAR("PRI") NULL VARCHAR("")] [VARCHAR("idx") TEXT("varchar(50)") VARCHAR("YES") VARCHAR("") NULL VARCHAR("")]]`
-	assertMatches(t, conn, "show columns from `t5_null_vindex` in `ks`", expected)
-	assertMatches(t, conn, "SHOW COLUMNS from `t5_null_vindex` in `ks`", expected)
-	assertMatches(t, conn, "SHOW columns FROM `t5_null_vindex` in `ks`", expected)
+	//expected := `[[VARCHAR("id") TEXT("bigint(20)") VARCHAR("NO") VARCHAR("PRI") NULL VARCHAR("")] [VARCHAR("idx") TEXT("varchar(50)") VARCHAR("YES") VARCHAR("") NULL VARCHAR("")]]`
+	//assertMatches(t, conn, "show columns from `t5_null_vindex` in `ks`", expected)
+	//assertMatches(t, conn, "SHOW COLUMNS from `t5_null_vindex` in `ks`", expected)
+	//assertMatches(t, conn, "SHOW columns FROM `t5_null_vindex` in `ks`", expected)
+	assertMatches(t, conn, "show tables from ks where Tables_in_ks='t5'", `[[VARCHAR("t5")]]`)
 }
 
 func TestCastConvert(t *testing.T) {

@@ -399,6 +399,7 @@ func TestExecutorShowColumns(t *testing.T) {
 	session := NewSafeSession(&vtgatepb.Session{TargetString: ""})
 
 	queries := []string{
+		"show tables from TestExecutor where Tables_in_TestExecutor='user'",
 		"SHOW COLUMNS FROM `user` in `TestExecutor`",
 		"show columns from `user` in `TestExecutor`",
 		"ShOw CoLuMnS fRoM `user` iN `TestExecutor`",

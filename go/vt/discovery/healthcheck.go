@@ -506,6 +506,7 @@ func (hc *HealthCheckImpl) broadcast(th *TabletHealth) {
 // CacheStatus returns a displayable version of the cache.
 func (hc *HealthCheckImpl) CacheStatus() TabletsCacheStatusList {
 	tcsMap := hc.cacheStatusMap()
+	tcsMap.
 	tcsl := make(TabletsCacheStatusList, 0, len(tcsMap))
 	for _, tcs := range tcsMap {
 		tcsl = append(tcsl, tcs)
