@@ -392,22 +392,31 @@ func ResultFromNumber(rcs []*resultColumn, val *sqlparser.SQLVal) (int, error) {
 
 // Vindex returns the vindex if the expression is a plain column reference
 // that is part of the specified route, and has an associated vindex.
-func (st *symtab) Vindex(expr sqlparser.Expr, scope *route) vindexes.SingleColumn {
-	col, ok := expr.(*sqlparser.ColName)
-	if !ok {
-		return nil
-	}
-	if col.Metadata == nil {
-		// Find will set the Metadata.
-		if _, _, err := st.Find(col); err != nil {
+func (st *symtab) Vindex(expr sqlparser.Expr, scope *route) vindexes.Vindex {
+	switch node := expr.(type) {
+	case *sqlparser.ColName:
+		if node.Metadata == nil {
+			// Find will set the Metadata.
+			if _, _, err := st.Find(node); err != nil {
+				return nil
+			}
+		}
+		c := node.Metadata.(*column)
+		if c.Origin() != scope {
 			return nil
 		}
-	}
-	c := col.Metadata.(*column)
-	if c.Origin() != scope {
+		return c.vindex
+	case sqlparser.ValTuple:
+		for _, col := range node {
+			colName, ok := col.(*sqlparser.ColName)
+			if !ok {
+				return nil
+			}
+
+		}
 		return nil
 	}
-	return c.vindex
+	return nil
 }
 
 // BuildColName builds a *sqlparser.ColName for the resultColumn specified

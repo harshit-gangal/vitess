@@ -625,14 +625,25 @@ func (rb *route) UpdatePlan(pb *primitiveBuilder, filter sqlparser.Expr) {
 	}
 }
 
-func (rb *route) updateRoute(opcode engine.RouteOpcode, vindex vindexes.SingleColumn, condition sqlparser.Expr) {
+func (rb *route) updateRoute(opcode engine.RouteOpcode, vindex vindexes.Vindex, condition sqlparser.Expr) {
 	rb.eroute.Opcode = opcode
-	rb.eroute.Vindex = vindex
 	rb.condition = condition
+	if vindex == nil {
+		rb.eroute.Vindex = nil
+		rb.eroute.MultiVindex = nil
+		return
+	}
+	if vdx, ok := vindex.(vindexes.SingleColumn); ok {
+		rb.eroute.Vindex = vdx
+		return
+	}
+	if vdx, ok := vindex.(vindexes.MultiColumn); ok {
+		rb.eroute.MultiVindex = vdx
+	}
 }
 
 // computePlan computes the plan for the specified filter.
-func (rb *route) computePlan(pb *primitiveBuilder, filter sqlparser.Expr) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, condition sqlparser.Expr) {
+func (rb *route) computePlan(pb *primitiveBuilder, filter sqlparser.Expr) (opcode engine.RouteOpcode, vindex vindexes.Vindex, condition sqlparser.Expr) {
 	switch node := filter.(type) {
 	case *sqlparser.ComparisonExpr:
 		switch node.Operator {
@@ -650,11 +661,11 @@ func (rb *route) computePlan(pb *primitiveBuilder, filter sqlparser.Expr) (opcod
 }
 
 // computeEqualPlan computes the plan for an equality constraint.
-func (rb *route) computeEqualPlan(pb *primitiveBuilder, comparison *sqlparser.ComparisonExpr) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, condition sqlparser.Expr) {
+func (rb *route) computeEqualPlan(pb *primitiveBuilder, comparison *sqlparser.ComparisonExpr) (opcode engine.RouteOpcode, vindex vindexes.Vindex, condition sqlparser.Expr) {
 	left := comparison.Left
 	right := comparison.Right
 
-	if sqlparser.IsNull(right) {
+	if sqlparser.IsNull(right) || containsNull(right) {
 		return engine.SelectNone, nil, nil
 	}
 
@@ -675,8 +686,21 @@ func (rb *route) computeEqualPlan(pb *primitiveBuilder, comparison *sqlparser.Co
 	return engine.SelectEqual, vindex, right
 }
 
+func containsNull(right sqlparser.Expr) bool {
+	valTuple, ok := right.(sqlparser.ValTuple)
+	if !ok {
+		return false
+	}
+	for _, expr := range valTuple {
+		if sqlparser.IsNull(expr) {
+			return true
+		}
+	}
+	return false
+}
+
 // computeEqualPlan computes the plan for an equality constraint.
-func (rb *route) computeISPlan(pb *primitiveBuilder, comparison *sqlparser.IsExpr) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, condition sqlparser.Expr) {
+func (rb *route) computeISPlan(pb *primitiveBuilder, comparison *sqlparser.IsExpr) (opcode engine.RouteOpcode, vindex vindexes.Vindex, condition sqlparser.Expr) {
 	// we only handle IS NULL correct. IsExpr can contain other expressions as well
 	if comparison.Operator != sqlparser.IsNullStr {
 		return engine.SelectScatter, nil, nil
@@ -694,7 +718,7 @@ func (rb *route) computeISPlan(pb *primitiveBuilder, comparison *sqlparser.IsExp
 }
 
 // computeINPlan computes the plan for an IN constraint.
-func (rb *route) computeINPlan(pb *primitiveBuilder, comparison *sqlparser.ComparisonExpr) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, condition sqlparser.Expr) {
+func (rb *route) computeINPlan(pb *primitiveBuilder, comparison *sqlparser.ComparisonExpr) (opcode engine.RouteOpcode, vindex vindexes.Vindex, condition sqlparser.Expr) {
 	vindex = pb.st.Vindex(comparison.Left, rb)
 	if vindex == nil {
 		return engine.SelectScatter, nil, nil

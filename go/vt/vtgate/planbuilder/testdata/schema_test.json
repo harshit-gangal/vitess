@@ -98,7 +98,7 @@
         },
         "col2_col3_map": {
           "type": "multiColLookup_test",
-          "owner": "foo"
+          "owner": "tabfoo"
         }
       },
       "tables": {
@@ -281,7 +281,7 @@
             }
           ]
         },
-        "foo": {
+        "tabfoo": {
           "column_vindexes": [
             {
               "column": "col1",

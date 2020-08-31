@@ -94,6 +94,11 @@ type Route struct {
 	// It will be used to route the system table queries to a keyspace.
 	SysTableKeyspaceExpr []evalengine.Expr
 
+	// MultiVindex specifies the vindex to be used.
+	MultiVindex vindexes.Vindex
+	// MultiValues specifies the vindex values to use for routing.
+	MultiValues []evalengine.Expr
+
 	// Route does not take inputs
 	noInputs
 
