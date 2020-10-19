@@ -19,12 +19,8 @@ package sequence
 import (
 	"context"
 	"flag"
-	"fmt"
 	"os"
-	"strings"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 
 	"github.com/stretchr/testify/require"
 
@@ -39,50 +35,27 @@ var (
 	hostname           = "localhost"
 	unshardedKs        = "uks"
 	unshardedSQLSchema = `
-	create table sequence_test(
-		id bigint,
-		val varchar(16),
-		primary key(id)
-	)Engine=InnoDB;
 
-	create table sequence_test_seq (
-		id int default 0, 
-		next_id bigint default null, 
-		cache bigint default null, 
-		primary key(id)
-	) comment 'vitess_sequence' Engine=InnoDB;
-
-CREATE TABLE id_seq ( id INT, next_id BIGINT, cache BIGINT, PRIMARY KEY(id)) comment 'vitess_sequence';
-
-INSERT INTO id_seq (id, next_id, cache) values (0, 1, 1000);
+CREATE TABLE user_seq ( id INT, next_id BIGINT, cache BIGINT, PRIMARY KEY(id)) comment 'vitess_sequence';
+INSERT INTO user_seq (id, next_id, cache) values (0, 1, 1000);
+CREATE TABLE user_order_seq ( id INT, next_id BIGINT, cache BIGINT, PRIMARY KEY(id)) comment 'vitess_sequence';
+INSERT INTO user_order_seq (id, next_id, cache) values (0, 1, 1000);
+CREATE TABLE order_items_seq ( id INT, next_id BIGINT, cache BIGINT, PRIMARY KEY(id)) comment 'vitess_sequence';
+INSERT INTO order_items_seq (id, next_id, cache) values (0, 1, 1000);
 
 	`
 
 	unshardedVSchema = `
 		{	
 			"sharded":false,
-			"vindexes": {
-				"hash_index": {
-					"type": "hash"
-				}
-			},	
 			"tables": {
-				"sequence_test":{
-					"auto_increment":{
-						"column" : "id",
-						"sequence" : "sequence_test_seq"
-					},
-					"column_vindexes": [
-						{
-							"column": "id",
-							"name": "hash_index"
-						}
-					]
-				},
-				"sequence_test_seq": {
-					"type":   "sequence"
-				},
-                "id_seq": {
+                "user_seq": {
+                    "type": "sequence"
+                 },
+                "user_order_seq": {
+                    "type": "sequence"
+                 },
+                "order_items_seq": {
                     "type": "sequence"
                  }
 			}
@@ -92,67 +65,117 @@ INSERT INTO id_seq (id, next_id, cache) values (0, 1, 1000);
 	shardedKeyspaceName = `sks`
 
 	shardedSQLSchema = `
-CREATE TABLE ` + "`dotted.tablename`" + ` (
-    id BIGINT NOT NULL,
-    c1 DOUBLE NOT NULL,
-    c2 BIGINT,
-    PRIMARY KEY (id),
-    UNIQUE KEY (c1, c2)
-);
+create table user (id bigint, name varchar(50), email varchar(100), primary key (id));
 
-CREATE TABLE lookup_vindex (
-    c1 DOUBLE NOT NULL,
-    c2 BIGINT,
-    keyspace_id BLOB,
-    UNIQUE KEY (c1, c2)
-);
+
+create table user_order (id bigint, user_id bigint, order_date timestamp, primary key (id));
+
+
+create table order_items (id bigint, item_id bigint, order_id bigint, quantity bigint, primary key (id), unique key(item_id, order_id));
+
+
+create table order_user_lookup(order_id bigint, keyspace_id varbinary(50), primary key(order_id));
+
 `
-
 	shardedVSchema = `
 		{
 		  "sharded": true,
 		  "vindexes": {
 			"lookup_vindex": {
-			  "type": "consistent_lookup",
+			  "type": "consistent_lookup_unique",
 			  "params": {
-				"from": "c1,c2",
-				"table": "lookup_vindex",
+				"table": "order_user_lookup",
+				"from": "order_id",
 				"to": "keyspace_id"
 			  },
-			  "owner": "dotted.tablename"
+			  "owner": "user_order"
 			},
-			"hash": {
-			  "type": "hash"
+			"xxhash": {
+			  "type": "xxhash"
 			}
 		  },
 		  "tables": {
-			"dotted.tablename": {
+			"user": {
 			  "columnVindexes": [
 				{
 				  "column": "id",
-				  "name": "hash"
-				},
-				{
-				  "name": "lookup_vindex",
-				  "columns": [ "c1", "c2" ]
+				  "name": "xxhash"
 				}
 			  ],
 			  "autoIncrement": {
 				"column": "id",
-				"sequence": "id_seq"
+				"sequence": "user_seq"
 			  }
 			},
-			"lookup_vindex": {
+			"user_order": {
 			  "columnVindexes": [
 				{
-				  "column": "c1",
-				  "name": "hash"
+				  "column": "user_id",
+				  "name": "xxhash"
+				},
+				{
+				  "name": "lookup_vindex",
+				  "columns": [ "id" ]
+				}
+			  ],
+			  "autoIncrement": {
+				"column": "id",
+				"sequence": "user_order_seq"
+			  }
+			},
+			"order_user_lookup": {
+			  "columnVindexes": [
+				{
+				  "column": "order_id",
+				  "name": "xxhash"
 				}
 			  ]
+			},
+			"order_items": {
+			  "columnVindexes": [
+				{
+				  "column": "order_id",
+				  "name": "lookup_vindex"
+				}
+			  ],
+			  "autoIncrement": {
+				"column": "id",
+				"sequence": "order_items_seq"
+			  }
 			}
 		  }
-		}`
+		}
+`
+
 )
+
+func TestSeq(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer conn.Close()
+
+	//Initialize User table
+	exec(t, conn, `insert into user(name, email) values('John', 'john@xyz.com'), ('Emma', 'emma@xyz.com'), ('Clark', 'clark@xyz.com')`)
+
+	//Insert order for John
+	exec(t, conn, `begin`)
+	exec(t, conn, `insert into user_order(user_id, order_date) values(1, '2020-10-19')`)
+	exec(t, conn, `insert into order_items(item_id, order_id, quantity) values(990, 1, 24)`)
+	exec(t, conn, `commit`)
+
+	//exec(t, conn, `select uo.user_id, sum(io.quantity) from user_order uo join order_items oi on uo.order_id = oi.order_id order by uo`)
+	//exec(t, conn, `select u.name, u.email from user u
+	//						where u.id = (select t.uid, max(t.uq) from
+	//						(select uo.user_id as uid, sum(io.quantity) as uq
+	//							from user_order uo join order_items oi on uo.order_id = oi.order_id
+	//							order by uo.user_id) t order by t.uid)`)
+}
 
 func TestMain(m *testing.M) {
 	defer cluster.PanicHandler(nil)
@@ -173,7 +196,7 @@ func TestMain(m *testing.M) {
 			SchemaSQL: unshardedSQLSchema,
 			VSchema:   unshardedVSchema,
 		}
-		if err := clusterInstance.StartUnshardedKeyspace(*uKeyspace, 1, false); err != nil {
+		if err := clusterInstance.StartUnshardedKeyspace(*uKeyspace, 0, false); err != nil {
 			return 1
 		}
 
@@ -182,7 +205,7 @@ func TestMain(m *testing.M) {
 			SchemaSQL: shardedSQLSchema,
 			VSchema:   shardedVSchema,
 		}
-		if err := clusterInstance.StartKeyspace(*sKeyspace, []string{"-80", "80-"}, 1, false); err != nil {
+		if err := clusterInstance.StartKeyspace(*sKeyspace, []string{"-80", "80-"}, 0, false); err != nil {
 			return 1
 		}
 
@@ -201,80 +224,4 @@ func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 	require.Nil(t, err)
 	return qr
-}
-
-func TestSeq(t *testing.T) {
-	defer cluster.PanicHandler(t)
-	ctx := context.Background()
-	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
-	}
-	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
-	defer conn.Close()
-
-	//Initialize seq table
-	exec(t, conn, "insert into sequence_test_seq(id, next_id, cache) values(0,1,10)")
-
-	//Insert 4 values in the main table
-	exec(t, conn, "insert into sequence_test(val) values('a'), ('b') ,('c'), ('d')")
-
-	// Test select calls to main table and verify expected id.
-	qr := exec(t, conn, "select id, val  from sequence_test where id=4")
-	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(4) VARCHAR("d")]]`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
-
-	// Test next available seq id from cache
-	qr = exec(t, conn, "select next 1 values from sequence_test_seq")
-	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(5)]]`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
-
-	//Test next_id from seq table which should be the increased by cache value(id+cache)
-	qr = exec(t, conn, "select next_id from sequence_test_seq")
-	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(11)]]`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
-
-	// Test insert with no auto-inc
-	exec(t, conn, "insert into sequence_test(id, val) values(6, 'f')")
-	qr = exec(t, conn, "select * from sequence_test")
-	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(1) VARCHAR("a")] [INT64(2) VARCHAR("b")] [INT64(3) VARCHAR("c")] [INT64(4) VARCHAR("d")] [INT64(6) VARCHAR("f")]]`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
-
-	//Next insert will fail as we have corrupted the sequence
-	exec(t, conn, "begin")
-	_, err = conn.ExecuteFetch("insert into sequence_test(val) values('g')", 1000, false)
-	exec(t, conn, "rollback")
-	want := "Duplicate entry"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("wrong insert: %v, must contain %s", err, want)
-	}
-
-}
-
-func TestDotTableSeq(t *testing.T) {
-	defer cluster.PanicHandler(t)
-	ctx := context.Background()
-	vtParams := mysql.ConnParams{
-		Host:   "localhost",
-		Port:   clusterInstance.VtgateMySQLPort,
-		DbName: shardedKeyspaceName,
-	}
-	conn, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
-	defer conn.Close()
-
-	_, err = conn.ExecuteFetch("insert into `dotted.tablename` (c1,c2) values (10,10)", 1000, true)
-	require.NoError(t, err)
-
-	_, err = conn.ExecuteFetch("insert into `dotted.tablename` (c1,c2) values (10,10)", 1000, true)
-	require.Error(t, err)
-	mysqlErr := err.(*mysql.SQLError)
-	assert.Equal(t, 1062, mysqlErr.Num)
-	assert.Equal(t, "23000", mysqlErr.State)
-	assert.Contains(t, mysqlErr.Message, "Duplicate entry")
 }
