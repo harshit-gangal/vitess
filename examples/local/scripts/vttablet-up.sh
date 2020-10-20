@@ -41,6 +41,7 @@ vttablet \
  -log_queries_to_file $VTDATAROOT/tmp/$tablet_logfile \
  -tablet-path $alias \
  -tablet_hostname "$tablet_hostname" \
+ -init_db_name_override $keyspace \
  -init_keyspace $keyspace \
  -init_shard $shard \
  -init_tablet_type $tablet_type \
