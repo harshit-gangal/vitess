@@ -180,6 +180,12 @@ type Conn struct {
 
 	// Packet encoding variables.
 	sequence uint8
+
+	//
+	ch chan []byte
+
+	//
+	wg sync.WaitGroup
 }
 
 // splitStatementFunciton is the function that is used to split the statement in cas ef a multi-statement query.
@@ -231,6 +237,7 @@ func newServerConn(conn net.Conn, listener *Listener) *Conn {
 		listener:    listener,
 		closed:      sync2.NewAtomicBool(false),
 		PrepareData: make(map[uint32]*PrepareData),
+		ch:          make(chan []byte, 1),
 	}
 	if listener.connReadBufferSize > 0 {
 		c.bufferedReader = bufio.NewReaderSize(conn, listener.connReadBufferSize)
@@ -356,6 +363,7 @@ func (c *Conn) readHeaderFrom(r io.Reader) (int, error) {
 // we are stuck waiting for data, an error will also be returned, and
 // it most likely will be io.EOF.
 func (c *Conn) readEphemeralPacket() ([]byte, error) {
+	//c.wg.Add(1)
 	if c.currentEphemeralPolicy != ephemeralUnused {
 		panic(vterrors.Errorf(vtrpc.Code_INTERNAL, "readEphemeralPacket: unexpected currentEphemeralPolicy: %v", c.currentEphemeralPolicy))
 	}
@@ -416,6 +424,7 @@ func (c *Conn) readEphemeralPacket() ([]byte, error) {
 // packets smaller than MaxPacketSize can be read here.
 // This function usually shouldn't be used - use readEphemeralPacket.
 func (c *Conn) readEphemeralPacketDirect() ([]byte, error) {
+	//c.wg.Add(1)
 	if c.currentEphemeralPolicy != ephemeralUnused {
 		panic(vterrors.Errorf(vtrpc.Code_INTERNAL, "readEphemeralPacketDirect: unexpected currentEphemeralPolicy: %v", c.currentEphemeralPolicy))
 	}
@@ -458,6 +467,7 @@ func (c *Conn) recycleReadPacket() {
 		c.currentEphemeralBuffer = nil
 	}
 	c.currentEphemeralPolicy = ephemeralUnused
+	//c.wg.Done()
 }
 
 // readOnePacket reads a single packet into a newly allocated buffer.
@@ -595,6 +605,7 @@ func (c *Conn) writePacket(data []byte) error {
 }
 
 func (c *Conn) startEphemeralPacketWithHeader(length int) ([]byte, int) {
+	//c.wg.Add(1)
 	if c.currentEphemeralPolicy != ephemeralUnused {
 		panic("startEphemeralPacketWithHeader cannot be used while a packet is already started.")
 	}
@@ -634,6 +645,7 @@ func (c *Conn) recycleWritePacket() {
 	bufPool.Put(c.currentEphemeralBuffer)
 	c.currentEphemeralBuffer = nil
 	c.currentEphemeralPolicy = ephemeralUnused
+	//c.wg.Done()
 }
 
 // writeComQuit writes a Quit message for the server, to indicate we
@@ -844,13 +856,8 @@ func (c *Conn) writeEOFPacket(flags uint16, warnings uint16) error {
 // handleNextCommand is called in the server loop to process
 // incoming packets.
 func (c *Conn) handleNextCommand(handler Handler) bool {
-	c.sequence = 0
-	data, err := c.readEphemeralPacket()
-	if err != nil {
-		// Don't log EOF errors. They cause too much spam.
-		if err != io.EOF && !strings.Contains(err.Error(), "use of closed network connection") {
-			log.Errorf("Error reading packet from %s: %v", c, err)
-		}
+	data, more := <-c.ch
+	if !more {
 		return false
 	}
 

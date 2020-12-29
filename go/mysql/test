@@ -1,0 +1,2 @@
+client -> vtgate -> vttablet -> mysql
+
