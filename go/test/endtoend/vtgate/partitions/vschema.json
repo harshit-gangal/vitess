@@ -1,0 +1,44 @@
+{
+  "sharded": true,
+  "vindexes": {
+    "binary_md5": {
+      "type": "binary_md5"
+    },
+    "send_id_idx": {
+      "type": "lookup",
+      "params": {
+        "from": "send_id",
+        "table": "send_id_idx",
+        "to": "keyspace_id",
+        "autocommit": "true",
+        "batch_lookup": "true"
+      },
+      "owner": "messages"
+    },
+    "xxhash": {
+      "type": "xxhash"
+    }
+  },
+  "tables": {
+    "messages": {
+      "columnVindexes": [
+        {
+          "column": "subscriber_id",
+          "name": "xxhash"
+        },
+        {
+          "columns": [ "send_id"],
+          "name": "send_id_idx"
+        }
+      ]
+    },
+    "send_id_idx": {
+      "columnVindexes": [
+        {
+          "column": "send_id",
+          "name": "binary_md5"
+        }
+      ]
+    }
+  }
+}
