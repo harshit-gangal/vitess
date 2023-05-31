@@ -490,7 +490,13 @@ func (vc *vcursorImpl) Execute(ctx context.Context, method string, query string,
 		rollbackOnError = false
 	} else {
 		session.SetCommitOrder(co)
-		defer session.SetCommitOrder(vtgatepb.CommitOrder_NORMAL)
+		if method == "VindexLookup" || method == "VindexVerify" {
+			vc.safeSession.queryFromVindex = true
+		}
+		defer func() {
+			vc.safeSession.queryFromVindex = false
+			session.SetCommitOrder(vtgatepb.CommitOrder_NORMAL)
+		}()
 	}
 
 	err := vc.markSavepoint(ctx, rollbackOnError, map[string]*querypb.BindVariable{})
